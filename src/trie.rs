@@ -80,10 +80,10 @@ fn boundary_entropy_recur<'a>(trie: &Trie<Key<'a>, u32>, start: &Trie<Key<'a>, u
         match c.value() {
             Some(val) => {
                 if c.key().and_then(|k| Some(k.len())) > start.key().and_then(|k| Some(k.len() + 1)) {
-                    let cond_prob = (*start.value().unwrap() as f64).recip();
+                    let cond_prob = (*start.value().unwrap_or(&0) as f64).recip();
                     acc + cond_prob * cond_prob.log2()
                 } else {
-                    let cond_prob = *val as f64 / *start.value().unwrap() as f64;
+                    let cond_prob = *val as f64 / *start.value().unwrap_or(&0) as f64;
                     acc + cond_prob * cond_prob.log2()
                 }
             }
@@ -159,10 +159,15 @@ impl TrieStats {
     }
 
     pub fn normalized<'a>(&self, trie: &Trie<Key<'a>, u32>, key: &Key<'a>) -> (Option<f64>, Option<f64>) {
-        let f: &(f64, f64) = self.frequency.get(&key.len()).unwrap();
-        let e: &(f64, f64) = self.entropy.get(&key.len()).unwrap();
-        let norm_freq = trie.get(&key).map(|v| norm_stat(*v as f64, f));
-        let norm_entr = boundary_entropy(&trie, &key).map(|v| norm_stat(v, e));
+        let default: (f64, f64) = (0., 0.);
+        let f: &(f64, f64) = self.frequency.get(&key.len())
+            .unwrap_or(&default);
+        let e: &(f64, f64) = self.entropy.get(&key.len())
+            .unwrap_or(&default);
+        let norm_freq = trie.get(&key)
+            .map(|v| norm_stat(*v as f64, f));
+        let norm_entr = boundary_entropy(&trie, &key)
+            .map(|v| norm_stat(v, e));
         (norm_freq, norm_entr)
     }
 }
