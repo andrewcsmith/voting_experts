@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["Andrew Smith <andrewchristophersmith@gmail.com>"]
 
 [dependencies]
-radix_trie = { git = "https://github.com/andrewcsmith/rust_radix_trie" }
+radix_trie = "0.0.9"
