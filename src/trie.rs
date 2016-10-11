@@ -1,5 +1,5 @@
 extern crate radix_trie;
-use radix_trie::{Trie, TrieKey, TrieCommon, NibbleVec, ContainsTrieNode};
+use radix_trie::{Trie, TrieKey, TrieCommon, NibbleVec};
 
 use std::iter::Iterator;
 use std::str::*;
@@ -70,37 +70,29 @@ pub fn conditional_probability<'a>(trie: &Trie<Key<'a>, u32>, key: Key<'a>) -> O
 /// Get the boundary entropy of a given node
 pub fn boundary_entropy<'b, 'a: 'b>(trie: &'b Trie<Key<'a>, u32>, key: Key) -> Option<f64> {
     trie.subtrie(&key)
-        .and_then(|ref n| Some(boundary_entropy_recur(trie, n).neg()))
+        .map(|ref n| boundary_entropy_recur(n, n).neg())
 }
 
 fn boundary_entropy_recur<'a: 'b, 'b, 'c: 'd, 'd, T, S>(trie: T, start: &'d S) -> f64 
     where T: TrieCommon<'a, Key<'a>, u32>,
           &'d S: TrieCommon<'c, Key<'c>, u32>
 {
-    // Starting from the top, iterate through all children of the given trie or subtrie
-    trie.children().fold(0f64, |acc, ref child| {
-        // If the particular child node has a value
+    let v = *start.value().unwrap_or(&0) as f64;
+    // Starting from the top, iterate through all children of the given trie or subtrie. Sum all
+    // the values.
+    trie.children().map(|ref child| {
         match child.value() {
             Some(val) => {
-                let n = start.trie_node();
-                let start_key_len = n.key().and_then(|k| Some(k.len() + 1));
-                let zero = 0;
-                let start_key_val = n.value().unwrap_or(&zero);
-                let c_key_len = child.key().and_then(|k| Some(k.len()));
-                // If the key length is greater than the start key length + 1
-                if c_key_len > start_key_len {
-                    let cond_prob = (*start_key_val as f64).recip();
-                    acc + cond_prob * cond_prob.log2()
+                let cond_prob = if child.key().map(|k| k.len()) > start.key().map(|k| k.len() + 1) {
+                    v.recip()
                 } else {
-                    let cond_prob = *val as f64 / *start_key_val as f64;
-                    acc + cond_prob * cond_prob.log2()
-                }
+                    *val as f64 / v
+                };
+                cond_prob * cond_prob.log2()
             }
-            None => { 
-                boundary_entropy_recur(child, start) 
-            }
+            None => boundary_entropy_recur(child, start)
         }
-    })
+    }).sum()
 }
 
 #[derive(Debug)]
