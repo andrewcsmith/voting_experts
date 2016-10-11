@@ -1,7 +1,9 @@
-#![feature(str_char)]
-mod trie;
+extern crate radix_trie;
 
-use trie::{Trie, TrieKey, TrieStats, Key};
+mod trie;
+pub use trie::{Key, TrieStats};
+
+use radix_trie::{TrieKey, Trie};
 
 pub trait Expert {
     /// Casts a vote to place a boundary after usize
@@ -49,9 +51,9 @@ impl<'a> Expert for EntropyExpert<'a, Key<'a>, u32> {
             if string.is_char_boundary(i) {
                 let (a, b): (&str, &str) = string.split_at(i);
                 // println!("(a, b): {:?}", (a, b));
-                let aent = self.stats.normalized(self.trie, &Key(a))
+                let aent = self.stats.normalized(self.trie, Key(a))
                     .1.unwrap_or(0.);
-                let bent = self.stats.normalized(self.trie, &Key(b))
+                let bent = self.stats.normalized(self.trie, Key(b))
                     .1.unwrap_or(0.);
 
                 let entropy = aent + bent;
@@ -70,9 +72,9 @@ impl<'a> Expert for FrequencyExpert<'a, Key<'a>, u32> {
         for i in 1..(string.len()+1) {
             if string.is_char_boundary(i) {
                 let (a, b): (&str, &str) = string.split_at(i);
-                let afreq = self.stats.normalized(self.trie, &Key(a))
+                let afreq = self.stats.normalized(self.trie, Key(a))
                     .0.unwrap_or(0.);
-                let bfreq = self.stats.normalized(self.trie, &Key(b))
+                let bfreq = self.stats.normalized(self.trie, Key(b))
                     .0.unwrap_or(0.);
 
                 let frequency = afreq + bfreq;

@@ -1,13 +1,9 @@
 extern crate radix_trie;
-pub use self::radix_trie::{Trie, TrieKey, NibbleVec};
-use self::radix_trie::traversal::RefTraversal;
-use std::iter;
+use radix_trie::{Trie, TrieKey, TrieCommon, NibbleVec, ContainsTrieNode};
+
 use std::iter::Iterator;
-use std::fmt::Debug;
 use std::str::*;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::cmp::Ordering;
 use std::ops::Neg;
 
 #[derive(PartialEq, Eq, Clone, Debug, Copy)]
@@ -24,8 +20,8 @@ impl<'a> Key<'a> {
 }
 
 impl<'a> TrieKey for Key<'a> {
-    fn encode(&self) -> Vec<u8> {
-        self.0.bytes().collect()
+    fn encode(&self) -> NibbleVec {
+        NibbleVec::from_byte_vec(self.0.bytes().collect())
     }
 }
 
@@ -58,8 +54,9 @@ pub fn frequency_trie_from_string<'a, 'b: 'a>(string: &'a str, limit: usize) -> 
 }
 
 /// Only works with ascii strings
-pub fn conditional_probability<'a>(trie: &Trie<Key<'a>, u32>, key: &Key<'a>) -> Option<f64> {
-    trie.get_node(key).and_then(|node| {
+#[allow(dead_code)]
+pub fn conditional_probability<'a>(trie: &Trie<Key<'a>, u32>, key: Key<'a>) -> Option<f64> {
+    trie.subtrie(&key).and_then(|node| {
         node.value().and_then(|node_val| {
             let prefix = from_utf8(&key.0.as_bytes()[0..key.0.len() - 1]).unwrap();
             trie.get_ancestor(&Key(prefix)).and_then(|ancestor| {
@@ -71,24 +68,36 @@ pub fn conditional_probability<'a>(trie: &Trie<Key<'a>, u32>, key: &Key<'a>) -> 
 }
 
 /// Get the boundary entropy of a given node
-pub fn boundary_entropy<'a>(trie: &Trie<Key<'a>, u32>, key: &Key<'a>) -> Option<f64> {
-    trie.get_node(&key).and_then(|n| Some(boundary_entropy_recur(&n, &n).neg()))
+pub fn boundary_entropy<'b, 'a: 'b>(trie: &'b Trie<Key<'a>, u32>, key: Key) -> Option<f64> {
+    trie.subtrie(&key)
+        .and_then(|ref n| Some(boundary_entropy_recur(trie, n).neg()))
 }
 
-fn boundary_entropy_recur<'a>(trie: &Trie<Key<'a>, u32>, start: &Trie<Key<'a>, u32>) -> f64 {
-    trie.child_iter().fold(0f64, |acc, c| {
-        match c.value() {
+fn boundary_entropy_recur<'a: 'b, 'b, 'c: 'd, 'd, T, S>(trie: T, start: &'d S) -> f64 
+    where T: TrieCommon<'a, Key<'a>, u32>,
+          &'d S: TrieCommon<'c, Key<'c>, u32>
+{
+    // Starting from the top, iterate through all children of the given trie or subtrie
+    trie.children().fold(0f64, |acc, ref child| {
+        // If the particular child node has a value
+        match child.value() {
             Some(val) => {
-                if c.key().and_then(|k| Some(k.len())) > start.key().and_then(|k| Some(k.len() + 1)) {
-                    let cond_prob = (*start.value().unwrap_or(&0) as f64).recip();
+                let n = start.trie_node();
+                let start_key_len = n.key().and_then(|k| Some(k.len() + 1));
+                let zero = 0;
+                let start_key_val = n.value().unwrap_or(&zero);
+                let c_key_len = child.key().and_then(|k| Some(k.len()));
+                // If the key length is greater than the start key length + 1
+                if c_key_len > start_key_len {
+                    let cond_prob = (*start_key_val as f64).recip();
                     acc + cond_prob * cond_prob.log2()
                 } else {
-                    let cond_prob = *val as f64 / *start.value().unwrap_or(&0) as f64;
+                    let cond_prob = *val as f64 / *start_key_val as f64;
                     acc + cond_prob * cond_prob.log2()
                 }
             }
             None => { 
-                boundary_entropy_recur(&c, &start) 
+                boundary_entropy_recur(child, start) 
             }
         }
     })
@@ -136,7 +145,7 @@ impl TrieStats {
 
             let entropies: Vec<f64> = trie.keys().filter_map(|k| {
                 if k.len() == key_length {
-                    boundary_entropy(&trie, &k)
+                    boundary_entropy(&trie, *k)
                 } else {
                     None
                 }
@@ -158,7 +167,7 @@ impl TrieStats {
         stats
     }
 
-    pub fn normalized<'a>(&self, trie: &Trie<Key<'a>, u32>, key: &Key<'a>) -> (Option<f64>, Option<f64>) {
+    pub fn normalized<'a>(&self, trie: &Trie<Key<'a>, u32>, key: Key<'a>) -> (Option<f64>, Option<f64>) {
         let default: (f64, f64) = (0., 0.);
         let f: &(f64, f64) = self.frequency.get(&key.len())
             .unwrap_or(&default);
@@ -166,7 +175,7 @@ impl TrieStats {
             .unwrap_or(&default);
         let norm_freq = trie.get(&key)
             .map(|v| norm_stat(*v as f64, f));
-        let norm_entr = boundary_entropy(&trie, &key)
+        let norm_entr = boundary_entropy(&trie, key)
             .map(|v| norm_stat(v, e));
         (norm_freq, norm_entr)
     }
@@ -234,10 +243,10 @@ fn test_conditional_probability() {
     let trie = build_frequency_trie(Box::new(chained_iter));
 
     let key = Key("an");
-    let res: f64 = conditional_probability(&trie, &key).unwrap();
+    let res: f64 = conditional_probability(&trie, key).unwrap();
     assert_eq!(1.0, res);
     let key = Key("na");
-    let res: f64 = conditional_probability(&trie, &key).unwrap();
+    let res: f64 = conditional_probability(&trie, key).unwrap();
     assert_eq!(0.5, res);
 }
 
@@ -245,8 +254,8 @@ fn test_conditional_probability() {
 fn test_boundary_entropy() {
     let string = "abcabd";
     let trie = frequency_trie_from_string(string, 2);
-    assert_eq!(0.0, boundary_entropy(&trie, &Key("a")).unwrap());
-    assert_eq!(1.0, boundary_entropy(&trie, &Key("b")).unwrap());
+    assert_eq!(0.0, boundary_entropy(&trie, Key("a")).unwrap());
+    assert_eq!(1.0, boundary_entropy(&trie, Key("b")).unwrap());
 }
 
 #[test]
@@ -255,7 +264,7 @@ fn test_trie_stats() {
     let trie = frequency_trie_from_string(string, 2);
     let stats = TrieStats::from_trie(&trie);
     println!("stats: {:?}", stats);
-    let normed = stats.normalized(&trie, &Key(&"a"));
+    let normed = stats.normalized(&trie, Key("a"));
     println!("normed: {:?}", normed);
     assert!((normed.0.unwrap() - 0.707107).abs() < 1.0e-4);
     assert!((normed.1.unwrap() - -0.408248).abs() < 1.0e-4);
