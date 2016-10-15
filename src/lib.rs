@@ -173,6 +173,7 @@ fn test_vote_casting() {
     let string = "itwasabright";
     let votes = cast_votes(&string, 3);
     println!("votes: {:?}", votes);
+    assert_eq!(votes, vec![0, 2, 3, 1, 4, 0, 2, 2, 2, 2, 0, 0]);
 }
 
 #[test]
@@ -180,7 +181,12 @@ fn test_splitting() {
     let string = "itwasabrightcolddayinaprilandtheclockswerestrikingthirteenwinstonsmithhischinnuzzledintohisbreastinanefforttoescapethevilewindslippedquicklythroughtheglassdoorsofvictorymansionsthoughnotquicklyenoughtopreventaswirlofgrittydustfromenteringalongwithhimthehallwaysmeltofboiledcabbageandoldragmatsatoneendofitacolouredpostertoolargeforindoordisplayhadbeentackedtothewallitdepictedsimplyanenormousfacemorethanametrewidethefaceofamanofaboutfortyfivewithaheavyblackmoustacheandruggedlyhandsomefeatur";
     let votes = cast_votes(&string, 6);
     let res: Vec<&str> = split_string(&string, &votes, 6, 3);
-    for r in res {
+    for r in res.iter() {
         println!("{}", r);
     }
+    assert_eq!(res[0], "itwas");
+    assert_eq!(res[1], "abri");
+    assert_eq!(res[2], "ght");
+    assert_eq!(res[3], "c");
+    assert_eq!(res[4], "oldday");
 }
