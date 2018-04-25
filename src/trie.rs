@@ -1,12 +1,12 @@
-extern crate radix_trie;
 use radix_trie::{Trie, TrieKey, TrieCommon, NibbleVec};
+use serde::{Serialize, Deserialize};
 
 use std::iter::Iterator;
 use std::str::*;
 use std::collections::HashMap;
 use std::ops::Neg;
 
-#[derive(PartialEq, Eq, Clone, Debug, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Copy)]
 pub struct Key<'a>(pub &'a str);
 
 impl<'a> Key<'a> {
@@ -47,9 +47,12 @@ pub fn build_frequency_trie<'a, I: Iterator<Item=Key<'a>>>(items: Box<I>) -> Tri
 /// Constructs a frequency trie from a string, which must be made of 1-byte chars
 pub fn frequency_trie_from_string<'a, 'b: 'a>(string: &'a str, limit: usize) -> Trie<Key<'a>, u32> {
     let vector: &'a [u8] = string.as_bytes();
-    let chained_iter = (1..(limit+1)).flat_map(|i| vector.windows(i)).map(|v| {
-        Key(from_utf8(v).unwrap())
-    });
+    let chained_iter = (1..(limit+1)).flat_map(|i| vector.windows(i))
+        .map(|v| {
+            from_utf8(v).map(|k| Key(k))
+        })
+        .filter(|v| v.is_ok())
+        .map(|v| v.unwrap());
     build_frequency_trie(Box::new(chained_iter))
 }
 
@@ -95,7 +98,7 @@ fn boundary_entropy_recur<'a: 'b, 'b, 'c: 'd, 'd, T, S>(trie: T, start: &'d S) -
     }).sum()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TrieStats {
     /// Frequency stats for a given length as (mean, stddev)
     pub frequency: HashMap<usize, (f64, f64)>,
@@ -173,11 +176,11 @@ impl TrieStats {
     }
 }
 
-fn norm_stat(val: f64, mean_std: &(f64, f64)) -> f64 {
-    if val == mean_std.0 || mean_std.1 == 0. {
+fn norm_stat(val: f64, (mean, std): &(f64, f64)) -> f64 {
+    if val == *mean || *std == 0. {
         0.
     } else {
-        (val - mean_std.0) / mean_std.1
+        (val - mean) / std
     }
 }
 

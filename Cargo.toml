@@ -3,6 +3,10 @@ name = "voting_experts"
 version = "0.1.0"
 authors = ["Andrew Smith <andrewchristophersmith@gmail.com>"]
 
-[dependencies.radix_trie]
-git = "https://github.com/michaelsproul/rust_radix_trie"
+[dependencies]
+serde = "1.0"
+serde_derive = "1.0"
 
+[dependencies.radix_trie]
+version = "0.1.3"
+features = ["serde"]

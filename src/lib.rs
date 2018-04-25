@@ -1,6 +1,9 @@
 extern crate radix_trie;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
-mod trie;
+pub mod trie;
 pub use trie::{Key, TrieStats};
 
 use radix_trie::{TrieKey, Trie};
